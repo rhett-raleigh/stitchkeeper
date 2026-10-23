@@ -7,9 +7,10 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "observability": { "enabled": true },
-  // Only reachable through stitchkeeper.co, behind Cloudflare Access: the patterns are paid, personal-use files.
+  // Only reachable through stitchkeeper.rhettraleigh.com, behind Cloudflare Access: the patterns are paid, personal-use files.
   "workers_dev": false,
   "preview_urls": false,
+  "routes": [{ "pattern": "stitchkeeper.rhettraleigh.com", "custom_domain": true }],
   "d1_databases": [
     // database_id is filled in by `wrangler d1 create stitchkeeper` before the first deploy.
     { "binding": "DB", "database_name": "stitchkeeper", "database_id": "fa6c8c6a-f8e6-493b-b29b-2fd0532e64d9", "migrations_dir": "migrations" },
