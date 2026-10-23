@@ -40,6 +40,10 @@ db.exec(`
   );
 `);
 
+// Columns added after the first release.
+const patternColumns = db.prepare("PRAGMA table_info(patterns)").all().map((c) => c.name);
+if (!patternColumns.includes("source_pages")) db.exec("ALTER TABLE patterns ADD COLUMN source_pages TEXT");
+
 export type ProjectStatus = "active" | "paused" | "finished" | "frogged";
 
 export type PatternRecord = {
@@ -48,6 +52,8 @@ export type PatternRecord = {
   sourceUrl: string | null;
   sourceFile: string | null;
   imageUrl: string | null;
+  /** Pages of the source PDF this pattern came from (a pattern book holds many). */
+  sourcePages: { first: number; last: number } | null;
   extractor: string;
   pattern: Pattern;
   issues: StitchIssue[];
@@ -78,6 +84,7 @@ function toPattern(r: Row): PatternRecord {
     sourceUrl: r.source_url as string | null,
     sourceFile: r.source_file as string | null,
     imageUrl: r.image_url as string | null,
+    sourcePages: r.source_pages ? JSON.parse(r.source_pages as string) : null,
     extractor: r.extractor as string,
     pattern: JSON.parse(r.data as string),
     issues: JSON.parse(r.issues as string),
@@ -109,17 +116,19 @@ export function insertPattern(p: {
   sourceUrl?: string | null;
   sourceFile?: string | null;
   imageUrl?: string | null;
+  sourcePages?: { first: number; last: number } | null;
 }): number {
   const result = db
     .prepare(
-      `INSERT INTO patterns (title, source_url, source_file, image_url, extractor, data, issues)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO patterns (title, source_url, source_file, image_url, source_pages, extractor, data, issues)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       p.pattern.title,
       p.sourceUrl ?? null,
       p.sourceFile ?? null,
       p.imageUrl ?? null,
+      p.sourcePages ? JSON.stringify(p.sourcePages) : null,
       p.extractor,
       JSON.stringify(p.pattern),
       JSON.stringify(p.issues),
@@ -132,6 +141,14 @@ export function findPatternBySource(sourceUrl: string | null, sourceFile: string
     .prepare("SELECT * FROM patterns WHERE (source_url IS NOT NULL AND source_url = ?) OR (source_file IS NOT NULL AND source_file = ?)")
     .get(sourceUrl, sourceFile);
   return r ? toPattern(r) : null;
+}
+
+export function setPatternImage(id: number, imageUrl: string | null) {
+  db.prepare("UPDATE patterns SET image_url = ? WHERE id = ?").run(imageUrl, id);
+}
+
+export function listPatternsBySourceFile(sourceFile: string): PatternRecord[] {
+  return db.prepare("SELECT * FROM patterns WHERE source_file = ? ORDER BY id").all(sourceFile).map(toPattern);
 }
 
 export function listPatterns(): PatternRecord[] {

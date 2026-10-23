@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { deletePatternAction, startProject } from "@/app/actions";
@@ -73,7 +74,12 @@ export default async function PatternPage({ params }: PageProps<"/patterns/[id]"
         <aside className="space-y-4 rounded-2xl border border-line bg-card p-5 text-sm">
           {record.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={record.imageUrl} alt="" className="-mx-1 -mt-1 mb-2 rounded-xl" />
+            <img src={record.imageUrl} alt="" className="-mx-1 -mt-1 rounded-xl" />
+          )}
+          {record.sourceFile && (
+            <Link href={`/patterns/${record.id}/photo`} className="block text-xs text-muted underline hover:text-yarn">
+              {record.imageUrl ? "Choose a different photo" : "Choose a photo"}
+            </Link>
           )}
           {materials.map(([label, items]) =>
             items.length ? (

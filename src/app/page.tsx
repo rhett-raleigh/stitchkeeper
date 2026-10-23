@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { listPatterns, listProjects } from "@/lib/db";
 import { expandRows } from "@/lib/pattern";
+import { Library } from "@/components/library";
 
 const STATUS_LABEL = { active: "In progress", paused: "Paused", finished: "Finished", frogged: "Frogged" };
 
@@ -61,29 +62,21 @@ export default async function Home() {
             Nothing here yet. <Link href="/import" className="text-yarn underline">Import a pattern</Link> from a link or PDF.
           </p>
         ) : (
-          <ul className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {patterns.map((p) => (
-              <li key={p.id}>
-                <Link href={`/patterns/${p.id}`} className="group block">
-                  <div className="aspect-square overflow-hidden rounded-2xl border border-line bg-card">
-                    {p.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.imageUrl} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center font-display text-5xl text-line">
-                        {p.title.slice(0, 1)}
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 font-medium leading-snug">{p.title}</p>
-                  <p className="text-xs text-muted">
-                    {p.pattern.designer ?? (p.sourceUrl ? new URL(p.sourceUrl).hostname.replace(/^www\./, "") : "PDF")}
-                    {p.issues.length > 0 && <span className="text-warn"> · {p.issues.length} count check{p.issues.length > 1 && "s"}</span>}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <Library
+            items={patterns
+              .map((p) => ({
+                id: p.id,
+                title: p.title,
+                // Patterns split out of a book carry "From <book>." as their first note.
+                subtitle:
+                  p.pattern.notes.find((n) => n.startsWith("From "))?.slice(5, -1) ??
+                  p.pattern.designer ??
+                  (p.sourceUrl ? new URL(p.sourceUrl).hostname.replace(/^www\./, "") : "PDF"),
+                imageUrl: p.imageUrl,
+                issueCount: p.issues.length,
+              }))
+              .sort((a, b) => a.title.localeCompare(b.title))}
+          />
         )}
       </section>
     </div>

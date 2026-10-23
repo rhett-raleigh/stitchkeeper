@@ -35,7 +35,9 @@ async function main() {
       continue;
     }
     for (const file of await pdfsIn(path.resolve(target.replace(/^~/, process.env.HOME ?? "~")))) {
-      try { report(path.basename(file), await importPdf(await readFile(file), path.basename(file), { forceClaude })); }
+      try {
+        for (const r of await importPdf(await readFile(file), path.basename(file), { forceClaude })) report(path.basename(file), r);
+      }
       catch (e) { failed++; console.log(`✗ ${path.basename(file)}: ${(e as Error).message}`); }
     }
   }

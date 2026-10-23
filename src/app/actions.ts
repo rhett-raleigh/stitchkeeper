@@ -14,16 +14,19 @@ export async function importAction(_prev: ImportState, form: FormData): Promise<
   const forceClaude = form.get("forceClaude") === "on";
 
   let lastId: number | null = null;
+  let multiple = files.length > 1;
   try {
     if (url) lastId = (await importUrl(url, { forceClaude })).id;
     for (const file of files) {
-      lastId = (await importPdf(Buffer.from(await file.arrayBuffer()), file.name, { forceClaude })).id;
+      const results = await importPdf(Buffer.from(await file.arrayBuffer()), file.name, { forceClaude });
+      lastId = results[0].id;
+      if (results.length > 1) multiple = true;
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
   if (lastId == null) return { error: "Paste a link or choose a PDF." };
-  redirect(files.length > 1 ? "/" : `/patterns/${lastId}`);
+  redirect(multiple ? "/" : `/patterns/${lastId}`);
 }
 
 export async function startProject(patternId: number) {
@@ -36,6 +39,13 @@ export async function startProject(patternId: number) {
 export async function deletePatternAction(patternId: number) {
   db.deletePattern(patternId);
   redirect("/");
+}
+
+export async function setPatternPhoto(patternId: number, imageUrl: string | null) {
+  // Only photos we extracted ourselves (see lib/extract/images.ts).
+  if (imageUrl && !/^\/files\/[a-f0-9]{16}-p\d+(-i\d+)?\.jpg$/.test(imageUrl)) throw new Error("Not a pattern photo");
+  db.setPatternImage(patternId, imageUrl);
+  redirect(`/patterns/${patternId}`);
 }
 
 export async function moveRow(projectId: number, delta: number) {

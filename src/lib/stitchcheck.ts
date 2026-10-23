@@ -73,7 +73,8 @@ function countPart(part: string, previous: number | null): Count | null {
     const n = Number(m[1] ?? 1);
     return { consumed: n, produced: n };
   }
-  m = p.match(new RegExp(`^(\\d+) ${BASIC}$`));
+  // "3 sc" or Knotmonsters-style "SC 3"
+  m = p.match(new RegExp(`^(\\d+) ${BASIC}$`)) ?? p.match(new RegExp(`^${BASIC} (\\d+)$`));
   if (m) return { consumed: Number(m[1]), produced: Number(m[1]) };
 
   return null;
@@ -98,37 +99,53 @@ export type StitchIssue = {
   message: string;
 };
 
+function countRow(text: string, previous: number | null): Count | null {
+  // Loop placement ("BLO", "in FLO,") doesn't change the count.
+  const t = text.toLowerCase().replace(/\s+/g, " ").trim().replace(/^(?:in )?(?:blo|flo|back loops? only|front loops? only)[,:]?\s+/, "");
+  if (!t) return null;
+  // A foundation chain: "ch 34" / "chain 9, turn" makes the stitches the next row works into.
+  const chain = t.match(/^(?:ch|chain) (\d+)(?:,? turn\.?)?$/);
+  if (chain) return { consumed: 0, produced: Number(chain[1]) };
+  const result = countSequence(t, previous);
+  // "(sc, inc) (18)" / "dec (6)" with no repeat count means "repeat around".
+  const single = splitTopLevel(t).length === 1 && !/\b(times|x ?\d+|around)\b/.test(t);
+  if (result && single && previous != null && result.consumed > 0 && result.consumed < previous && previous % result.consumed === 0) {
+    const times = previous / result.consumed;
+    return { consumed: previous, produced: result.produced * times };
+  }
+  return result;
+}
+
 export function checkStitchCounts(pattern: Pattern): StitchIssue[] {
   const issues: StitchIssue[] = [];
   pattern.sections.forEach((section, sectionIndex) => {
-    let previous: number | null = null;
+    // After a mismatch we don't know whether the stated or the computed count
+    // is the real one, so carry both and use whichever the next row agrees with.
+    // That way one typo produces one flag, not a cascade down the piece.
+    let previous: number[] = [];
+    let lastFrom = 0;
     section.steps.forEach((step, stepIndex) => {
       if (step.kind !== "row") return;
-      const result = countSequence(step.text, previous);
-      if (result && step.stitchCount != null) {
-        const intoPrevious = previous != null && result.consumed > 0 && result.consumed !== previous;
-        if (result.produced !== step.stitchCount) {
-          issues.push({
-            sectionIndex,
-            stepIndex,
-            label: step.label,
-            stated: step.stitchCount,
-            computed: result.produced,
-            message: `${step.label} says (${step.stitchCount}) but the instructions make ${result.produced} sts.`,
-          });
-        } else if (intoPrevious) {
-          issues.push({
-            sectionIndex,
-            stepIndex,
-            label: step.label,
-            stated: step.stitchCount,
-            computed: result.produced,
-            message: `${step.label} works into ${result.consumed} sts, but the previous round has ${previous}.`,
-          });
-        }
+      // Numbering starting over means a new part of the piece.
+      if ((step.from ?? 0) <= lastFrom) previous = [];
+      lastFrom = step.to ?? step.from ?? lastFrom;
+
+      const tries = (previous.length ? previous : [null]).map((prev) => ({ prev, result: countRow(step.text, prev) }));
+      const problem = ({ prev, result }: (typeof tries)[number]) => {
+        if (!result || step.stitchCount == null) return null;
+        if (result.produced !== step.stitchCount) return `${step.label} says (${step.stitchCount}) but the instructions make ${result.produced} sts.`;
+        // Using fewer stitches than exist is normal for short rows and partial
+        // shaping; using more than exist is always a mistake somewhere.
+        if (prev != null && result.consumed > prev) return `${step.label} works into ${result.consumed} sts, but the previous round has ${prev}.`;
+        return null;
+      };
+      const ok = tries.find((t) => t.result && !problem(t));
+      const pick = ok ?? tries.find((t) => t.result) ?? tries[0];
+      const message = ok ? null : problem(pick);
+      if (message && pick.result) {
+        issues.push({ sectionIndex, stepIndex, label: step.label, stated: step.stitchCount!, computed: pick.result.produced, message });
       }
-      // Trust our own count over a stated one that we just disproved.
-      previous = result?.produced ?? step.stitchCount ?? null;
+      previous = [...new Set([step.stitchCount, pick.result?.produced].filter((n): n is number => n != null))];
     });
   });
   return issues;
