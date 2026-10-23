@@ -17,9 +17,9 @@ const STATUSES: [ProjectStatus, string][] = [
 
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
   await connection();
-  const project = getProject(Number((await params).id));
+  const project = await getProject(Number((await params).id));
   if (!project) notFound();
-  const record = getPattern(project.patternId)!;
+  const record = (await getPattern(project.patternId))!;
   const { pattern } = record;
   const rows = expandRows(pattern);
   const index = Math.min(project.rowIndex, rows.length);

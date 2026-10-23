@@ -8,8 +8,7 @@ const STATUS_LABEL = { active: "In progress", paused: "Paused", finished: "Finis
 
 export default async function Home() {
   await connection();
-  const projects = listProjects();
-  const patterns = listPatterns();
+  const [projects, patterns] = await Promise.all([listProjects(), listPatterns()]);
 
   return (
     <div className="space-y-12 pt-6">

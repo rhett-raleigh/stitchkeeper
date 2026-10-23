@@ -1,35 +1,35 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import path from "node:path";
 import { setPatternPhoto } from "@/app/actions";
-import { FILES_DIR, getPattern } from "@/lib/db";
-import { photoCandidates, savePageRender, savePhoto } from "@/lib/extract/images";
-
-const MAX_PHOTOS = 24;
-const MAX_PAGES = 8;
+import { getPattern } from "@/lib/db";
+import { photoChoices } from "@/lib/extractor";
+import { getFile, getJson, putExtracted, putJson } from "@/lib/files";
 
 export default async function ChoosePhotoPage({ params }: PageProps<"/patterns/[id]/photo">) {
   await connection();
-  const record = getPattern(Number((await params).id));
+  const record = await getPattern(Number((await params).id));
   if (!record?.sourceFile) notFound();
+  const sourceFile = record.sourceFile;
 
-  const file = path.join(FILES_DIR, record.sourceFile);
-  const hash = record.sourceFile.replace(/\.pdf$/, "");
+  const hash = sourceFile.replace(/\.pdf$/, "");
   const pages = record.sourcePages ?? { first: 1, last: 1 };
   // Pattern books put the finished-piece photo on the page before the title.
   const range = { first: Math.max(1, pages.first - 1), last: pages.last };
-  // Extracted on first visit, then served from data/files.
-  const photos: string[] = [];
-  for (const c of (await photoCandidates(file, range)).slice(0, MAX_PHOTOS)) {
-    const name = await savePhoto(file, hash, c, FILES_DIR);
-    if (name) photos.push(`/files/${name}`);
-  }
-  const pageRenders: string[] = [];
-  for (let page = range.first; page <= Math.min(range.last, range.first + MAX_PAGES - 1); page++) {
-    const name = await savePageRender(file, hash, page, FILES_DIR);
-    if (name) pageRenders.push(`/files/${name}`);
-  }
+  // Extracted on first visit (that can take a while for a big PDF), then remembered in R2.
+  const key = `choices/${hash}-${range.first}-${range.last}.json`;
+  const choices =
+    (await getJson<{ photos: string[]; pageRenders: string[] }>(key)) ??
+    (await (async () => {
+      const pdf = await getFile(sourceFile);
+      if (!pdf) notFound();
+      const { files, ...names } = await photoChoices(await pdf.arrayBuffer(), hash, range);
+      await putExtracted(files);
+      await putJson(key, names);
+      return names;
+    })());
+  const photos = choices.photos.map((name) => `/files/${name}`);
+  const pageRenders = choices.pageRenders.map((name) => `/files/${name}`);
 
   const option = (url: string, label: string) => (
     <li key={url}>

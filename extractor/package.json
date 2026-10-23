@@ -1,0 +1,10 @@
+{
+  "name": "stitchkeeper-extractor",
+  "private": true,
+  "description": "Container image dependencies for extractor/server.ts (versions match the root package.json)",
+  "dependencies": {
+    "sharp": "0.35.5",
+    "tsx": "4.23.15",
+    "zod": "4.6.7"
+  }
+}

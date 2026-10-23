@@ -1,48 +1,9 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { Pattern } from "./pattern";
 import type { StitchIssue } from "./stitchcheck";
 
-export const DATA_DIR = process.env.STITCHKEEPER_DATA ?? path.join(process.cwd(), "data");
-export const FILES_DIR = path.join(DATA_DIR, "files");
-mkdirSync(FILES_DIR, { recursive: true });
-
-const globalForDb = globalThis as unknown as { stitchkeeperDb?: DatabaseSync };
-const db = (globalForDb.stitchkeeperDb ??= new DatabaseSync(path.join(DATA_DIR, "stitchkeeper.db")));
-
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  CREATE TABLE IF NOT EXISTS patterns (
-    id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL,
-    source_url TEXT,
-    source_file TEXT,
-    image_url TEXT,
-    extractor TEXT NOT NULL,
-    data TEXT NOT NULL,
-    issues TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY,
-    pattern_id INTEGER NOT NULL REFERENCES patterns(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    row_index INTEGER NOT NULL DEFAULT 0,
-    piece INTEGER NOT NULL DEFAULT 1,
-    yarn TEXT NOT NULL DEFAULT '',
-    hook TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT '',
-    started_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    finished_at TEXT
-  );
-`);
-
-// Columns added after the first release.
-const patternColumns = db.prepare("PRAGMA table_info(patterns)").all().map((c) => c.name);
-if (!patternColumns.includes("source_pages")) db.exec("ALTER TABLE patterns ADD COLUMN source_pages TEXT");
+// Cloudflare D1. Schema lives in migrations/; locally it's the miniflare copy in .wrangler/.
+const db = () => getCloudflareContext().env.DB;
 
 export type ProjectStatus = "active" | "paused" | "finished" | "frogged";
 
@@ -109,7 +70,7 @@ function toProject(r: Row): ProjectRecord {
   };
 }
 
-export function insertPattern(p: {
+export async function insertPattern(p: {
   pattern: Pattern;
   issues: StitchIssue[];
   extractor: string;
@@ -117,13 +78,13 @@ export function insertPattern(p: {
   sourceFile?: string | null;
   imageUrl?: string | null;
   sourcePages?: { first: number; last: number } | null;
-}): number {
-  const result = db
+}): Promise<number> {
+  const result = await db()
     .prepare(
       `INSERT INTO patterns (title, source_url, source_file, image_url, source_pages, extractor, data, issues)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(
+    .bind(
       p.pattern.title,
       p.sourceUrl ?? null,
       p.sourceFile ?? null,
@@ -132,60 +93,69 @@ export function insertPattern(p: {
       p.extractor,
       JSON.stringify(p.pattern),
       JSON.stringify(p.issues),
-    );
-  return Number(result.lastInsertRowid);
-}
-
-export function findPatternBySource(sourceUrl: string | null, sourceFile: string | null): PatternRecord | null {
-  const r = db
-    .prepare("SELECT * FROM patterns WHERE (source_url IS NOT NULL AND source_url = ?) OR (source_file IS NOT NULL AND source_file = ?)")
-    .get(sourceUrl, sourceFile);
-  return r ? toPattern(r) : null;
-}
-
-export function setPatternImage(id: number, imageUrl: string | null) {
-  db.prepare("UPDATE patterns SET image_url = ? WHERE id = ?").run(imageUrl, id);
-}
-
-export function listPatternsBySourceFile(sourceFile: string): PatternRecord[] {
-  return db.prepare("SELECT * FROM patterns WHERE source_file = ? ORDER BY id").all(sourceFile).map(toPattern);
-}
-
-export function listPatterns(): PatternRecord[] {
-  return db.prepare("SELECT * FROM patterns ORDER BY created_at DESC, id DESC").all().map(toPattern);
-}
-
-export function getPattern(id: number): PatternRecord | null {
-  const r = db.prepare("SELECT * FROM patterns WHERE id = ?").get(id);
-  return r ? toPattern(r) : null;
-}
-
-export function deletePattern(id: number) {
-  db.prepare("DELETE FROM projects WHERE pattern_id = ?").run(id);
-  db.prepare("DELETE FROM patterns WHERE id = ?").run(id);
-}
-
-export function createProject(patternId: number, name: string): number {
-  const result = db.prepare("INSERT INTO projects (pattern_id, name) VALUES (?, ?)").run(patternId, name);
-  return Number(result.lastInsertRowid);
-}
-
-export function listProjects(): (ProjectRecord & { pattern: PatternRecord })[] {
-  return db
-    .prepare(
-      `SELECT pr.*, pa.id AS pa_id FROM projects pr JOIN patterns pa ON pa.id = pr.pattern_id
-       ORDER BY CASE pr.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, pr.updated_at DESC`,
     )
-    .all()
-    .map((r) => ({ ...toProject(r), pattern: getPattern(r.pa_id as number)! }));
+    .run();
+  return result.meta.last_row_id;
 }
 
-export function getProject(id: number): ProjectRecord | null {
-  const r = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
+export async function findPatternBySource(sourceUrl: string | null, sourceFile: string | null): Promise<PatternRecord | null> {
+  const r = await db()
+    .prepare("SELECT * FROM patterns WHERE (source_url IS NOT NULL AND source_url = ?) OR (source_file IS NOT NULL AND source_file = ?)")
+    .bind(sourceUrl, sourceFile)
+    .first<Row>();
+  return r ? toPattern(r) : null;
+}
+
+export async function setPatternImage(id: number, imageUrl: string | null) {
+  await db().prepare("UPDATE patterns SET image_url = ? WHERE id = ?").bind(imageUrl, id).run();
+}
+
+export async function listPatternsBySourceFile(sourceFile: string): Promise<PatternRecord[]> {
+  const { results } = await db().prepare("SELECT * FROM patterns WHERE source_file = ? ORDER BY id").bind(sourceFile).all<Row>();
+  return results.map(toPattern);
+}
+
+export async function listPatterns(): Promise<PatternRecord[]> {
+  const { results } = await db().prepare("SELECT * FROM patterns ORDER BY created_at DESC, id DESC").all<Row>();
+  return results.map(toPattern);
+}
+
+export async function getPattern(id: number): Promise<PatternRecord | null> {
+  const r = await db().prepare("SELECT * FROM patterns WHERE id = ?").bind(id).first<Row>();
+  return r ? toPattern(r) : null;
+}
+
+export async function deletePattern(id: number) {
+  await db().batch([
+    db().prepare("DELETE FROM projects WHERE pattern_id = ?").bind(id),
+    db().prepare("DELETE FROM patterns WHERE id = ?").bind(id),
+  ]);
+}
+
+export async function createProject(patternId: number, name: string): Promise<number> {
+  const result = await db().prepare("INSERT INTO projects (pattern_id, name) VALUES (?, ?)").bind(patternId, name).run();
+  return result.meta.last_row_id;
+}
+
+export async function listProjects(): Promise<(ProjectRecord & { pattern: PatternRecord })[]> {
+  // Two queries rather than a join, so each pattern's (large) data column is read once.
+  const [{ results: projects }, { results: patterns }] = await db().batch<Row>([
+    db().prepare(
+      `SELECT * FROM projects
+       ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, updated_at DESC`,
+    ),
+    db().prepare("SELECT * FROM patterns WHERE id IN (SELECT pattern_id FROM projects)"),
+  ]);
+  const byId = new Map(patterns.map((r) => [r.id as number, toPattern(r)]));
+  return projects.map((r) => ({ ...toProject(r), pattern: byId.get(r.pattern_id as number)! }));
+}
+
+export async function getProject(id: number): Promise<ProjectRecord | null> {
+  const r = await db().prepare("SELECT * FROM projects WHERE id = ?").bind(id).first<Row>();
   return r ? toProject(r) : null;
 }
 
-export function updateProject(
+export async function updateProject(
   id: number,
   fields: Partial<Pick<ProjectRecord, "rowIndex" | "piece" | "status" | "yarn" | "hook" | "notes" | "name">>,
 ) {
@@ -203,9 +173,12 @@ export function updateProject(
   const sets = entries.map(([k]) => `${columns[k]} = ?`);
   const values = entries.map(([, v]) => v as string | number);
   if (fields.status === "finished") sets.push("finished_at = datetime('now')");
-  db.prepare(`UPDATE projects SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...values, id);
+  await db()
+    .prepare(`UPDATE projects SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`)
+    .bind(...values, id)
+    .run();
 }
 
-export function deleteProject(id: number) {
-  db.prepare("DELETE FROM projects WHERE id = ?").run(id);
+export async function deleteProject(id: number) {
+  await db().prepare("DELETE FROM projects WHERE id = ?").bind(id).run();
 }

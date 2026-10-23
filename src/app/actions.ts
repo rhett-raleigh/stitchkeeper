@@ -30,32 +30,32 @@ export async function importAction(_prev: ImportState, form: FormData): Promise<
 }
 
 export async function startProject(patternId: number) {
-  const pattern = db.getPattern(patternId);
+  const pattern = await db.getPattern(patternId);
   if (!pattern) throw new Error("Pattern not found");
-  const id = db.createProject(patternId, pattern.title);
+  const id = await db.createProject(patternId, pattern.title);
   redirect(`/projects/${id}`);
 }
 
 export async function deletePatternAction(patternId: number) {
-  db.deletePattern(patternId);
+  await db.deletePattern(patternId);
   redirect("/");
 }
 
 export async function setPatternPhoto(patternId: number, imageUrl: string | null) {
   // Only photos we extracted ourselves (see lib/extract/images.ts).
   if (imageUrl && !/^\/files\/[a-f0-9]{16}-p\d+(-i\d+)?\.jpg$/.test(imageUrl)) throw new Error("Not a pattern photo");
-  db.setPatternImage(patternId, imageUrl);
+  await db.setPatternImage(patternId, imageUrl);
   redirect(`/patterns/${patternId}`);
 }
 
 export async function moveRow(projectId: number, delta: number) {
-  const project = db.getProject(projectId);
+  const project = await db.getProject(projectId);
   if (!project) return;
-  const pattern = db.getPattern(project.patternId)!;
+  const pattern = (await db.getPattern(project.patternId))!;
   const rows = expandRows(pattern.pattern);
   const rowIndex = Math.min(Math.max(project.rowIndex + delta, 0), rows.length);
   const changedSection = rows[rowIndex]?.sectionIndex !== rows[project.rowIndex]?.sectionIndex;
-  db.updateProject(projectId, {
+  await db.updateProject(projectId, {
     rowIndex,
     piece: changedSection ? 1 : undefined,
     status: project.status === "paused" ? "active" : undefined,
@@ -64,25 +64,25 @@ export async function moveRow(projectId: number, delta: number) {
 }
 
 export async function jumpToRow(projectId: number, rowIndex: number) {
-  db.updateProject(projectId, { rowIndex, piece: 1 });
+  await db.updateProject(projectId, { rowIndex, piece: 1 });
   refresh();
 }
 
 // Pieces made more than once (e.g. "make 2 arms") restart the same section.
 export async function nextPiece(projectId: number, sectionStart: number) {
-  const project = db.getProject(projectId);
+  const project = await db.getProject(projectId);
   if (!project) return;
-  db.updateProject(projectId, { piece: project.piece + 1, rowIndex: sectionStart });
+  await db.updateProject(projectId, { piece: project.piece + 1, rowIndex: sectionStart });
   refresh();
 }
 
 export async function setStatus(projectId: number, status: db.ProjectStatus) {
-  db.updateProject(projectId, { status });
+  await db.updateProject(projectId, { status });
   refresh();
 }
 
 export async function saveProjectDetails(projectId: number, form: FormData) {
-  db.updateProject(projectId, {
+  await db.updateProject(projectId, {
     name: String(form.get("name") ?? "").trim() || undefined,
     yarn: String(form.get("yarn") ?? ""),
     hook: String(form.get("hook") ?? ""),
@@ -92,6 +92,6 @@ export async function saveProjectDetails(projectId: number, form: FormData) {
 }
 
 export async function deleteProjectAction(projectId: number) {
-  db.deleteProject(projectId);
+  await db.deleteProject(projectId);
   redirect("/");
 }

@@ -3,14 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently -k -n next,pdf -c blue,magenta \"next dev\" \"npm run extractor -- watch\"",
+    "extractor": "EXTRACTOR_PORT=8788 tsx extractor/server.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:migrate": "wrangler d1 migrations apply stitchkeeper --local",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "import": "tsx scripts/import.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
+    "@cloudflare/containers": "^0.3.7",
+    "@opennextjs/cloudflare": "^1.20.13",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -22,10 +29,15 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.6",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.152.0"
+  },
+  "allowScripts": {
+    "workerd@1.20261019.1": true
   }
 }
