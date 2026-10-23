@@ -27,6 +27,8 @@ function inserts(db: DatabaseSync, table: string): string[] {
 
 function main() {
   mkdirSync(OUT, { recursive: true });
+  // Create the tables first (a no-op once migrations/ is applied).
+  execFileSync("npx", ["wrangler", "d1", "migrations", "apply", "stitchkeeper", where], { stdio: ["ignore", "inherit", "inherit"] });
   const existing = JSON.parse(wrangler("d1", "execute", "stitchkeeper", where, "--json", "--command", "SELECT COUNT(*) AS n FROM patterns"));
   const count = existing[0].results[0].n as number;
   if (count > 0 && !replace) {

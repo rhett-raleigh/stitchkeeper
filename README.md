@@ -27,7 +27,7 @@ The old `data/` folder (node:sqlite + PDFs) is copied into D1/R2 with `npx tsx s
 1. `npx wrangler login`; the account needs Workers Paid (Containers).
 2. `npx wrangler d1 create stitchkeeper` and put the `database_id` in `wrangler.jsonc`;
    `npx wrangler r2 bucket create stitchkeeper-files`.
-3. `npx wrangler d1 migrations apply stitchkeeper --remote`, then `npx tsx scripts/migrate-data.ts --remote`.
+3. `npx tsx scripts/migrate-data.ts --remote` (creates the tables, then copies the data).
 4. `npx wrangler secret put ANTHROPIC_API_KEY` (optional, for Claude extraction).
 5. `npm run deploy`, then put Cloudflare Access in front of the app before sharing the URL:
    the patterns are paid, personal-use files.

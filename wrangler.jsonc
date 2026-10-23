@@ -9,7 +9,7 @@
   "observability": { "enabled": true },
   "d1_databases": [
     // database_id is filled in by `wrangler d1 create stitchkeeper` before the first deploy.
-    { "binding": "DB", "database_name": "stitchkeeper", "database_id": "local", "migrations_dir": "migrations" },
+    { "binding": "DB", "database_name": "stitchkeeper", "database_id": "fa6c8c6a-f8e6-493b-b29b-2fd0532e64d9", "migrations_dir": "migrations" },
   ],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "stitchkeeper-files" }],
   // PDF text and photo extraction (poppler + sharp), see extractor/.
