@@ -1,7 +1,13 @@
 // Bulk import: npm run import -- ~/Downloads/crochet "https://example.com/pattern" one.pdf
+//
+// Sends each link/PDF to a running Stitchkeeper: `npm run dev` (http://localhost:3000) unless
+// STITCHKEEPER_URL is set. The deployed app sits behind Cloudflare Access, so for it also set
+// CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET (an Access service token).
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { importPdf, importUrl, type ImportResult } from "../src/lib/importer";
+import type { ImportResult } from "../src/lib/importer";
+
+const BASE = (process.env.STITCHKEEPER_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 async function pdfsIn(target: string): Promise<string[]> {
   const s = await stat(target);
@@ -11,6 +17,19 @@ async function pdfsIn(target: string): Promise<string[]> {
     .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".pdf"))
     .map((e) => path.join(e.parentPath, e.name))
     .sort();
+}
+
+async function send(form: FormData): Promise<ImportResult[]> {
+  const headers: Record<string, string> = { "x-stitchkeeper-import": "1" };
+  if (process.env.CF_ACCESS_CLIENT_ID) {
+    headers["CF-Access-Client-Id"] = process.env.CF_ACCESS_CLIENT_ID;
+    headers["CF-Access-Client-Secret"] = process.env.CF_ACCESS_CLIENT_SECRET ?? "";
+  }
+  const res = await fetch(`${BASE}/api/import`, { method: "POST", body: form, headers, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400) throw new Error("Redirected (to a login page?). Set CF_ACCESS_CLIENT_ID/SECRET.");
+  const json = (await res.json().catch(() => ({ error: `HTTP ${res.status}` }))) as { results?: ImportResult[]; error?: string };
+  if (!res.ok || !json.results) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json.results;
 }
 
 function report(name: string, r: ImportResult) {
@@ -27,18 +46,22 @@ async function main() {
     process.exit(1);
   }
 
+  console.log(`Importing into ${BASE}`);
   let failed = 0;
   for (const target of targets) {
+    const form = new FormData();
+    if (forceClaude) form.set("forceClaude", "1");
     if (/^https?:\/\//.test(target)) {
-      try { report(target, await importUrl(target, { forceClaude })); }
+      form.set("url", target);
+      try { for (const r of await send(form)) report(target, r); }
       catch (e) { failed++; console.log(`✗ ${target}: ${(e as Error).message}`); }
       continue;
     }
     for (const file of await pdfsIn(path.resolve(target.replace(/^~/, process.env.HOME ?? "~")))) {
-      try {
-        for (const r of await importPdf(await readFile(file), path.basename(file), { forceClaude })) report(path.basename(file), r);
-      }
-      catch (e) { failed++; console.log(`✗ ${path.basename(file)}: ${(e as Error).message}`); }
+      const name = path.basename(file);
+      form.set("pdf", new File([await readFile(file)], name, { type: "application/pdf" }));
+      try { for (const r of await send(form)) report(name, r); }
+      catch (e) { failed++; console.log(`✗ ${name}: ${(e as Error).message}`); }
     }
   }
   if (failed) process.exitCode = 1;

@@ -1,17 +1,16 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { FILES_DIR } from "@/lib/db";
+import { FILE_NAME, getFile } from "@/lib/files";
 
 export async function GET(_req: Request, ctx: RouteContext<"/files/[name]">) {
   const { name } = await ctx.params;
-  // Stored PDFs ("<hash>.pdf") and photos pulled from them ("<hash>-p3.jpg", "<hash>-p3-i2.jpg").
-  if (!/^[a-f0-9]{16}(\.pdf|-p\d+(-i\d+)?\.jpg)$/.test(name)) return new Response("Not found", { status: 404 });
-  try {
-    const data = await readFile(path.join(FILES_DIR, name));
-    const type = name.endsWith(".pdf") ? "application/pdf" : "image/jpeg";
-    // Files are named by content, so they never change.
-    return new Response(data, { headers: { "content-type": type, "cache-control": "public, max-age=31536000, immutable" } });
-  } catch {
-    return new Response("Not found", { status: 404 });
-  }
+  if (!FILE_NAME.test(name)) return new Response("Not found", { status: 404 });
+  const file = await getFile(name);
+  if (!file) return new Response("Not found", { status: 404 });
+  // Files are named by content, so they never change.
+  return new Response(file.body, {
+    headers: {
+      "content-type": file.httpMetadata?.contentType ?? (name.endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
+      "cache-control": "private, max-age=31536000, immutable",
+      etag: file.httpEtag,
+    },
+  });
 }

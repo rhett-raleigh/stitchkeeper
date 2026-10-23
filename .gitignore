@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 data/
+
+# cloudflare
+/.open-next/
+/.wrangler/
+.dev.vars*
+/.serena/

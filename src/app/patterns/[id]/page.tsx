@@ -8,7 +8,7 @@ import { getPattern } from "@/lib/db";
 
 export default async function PatternPage({ params }: PageProps<"/patterns/[id]">) {
   await connection();
-  const record = getPattern(Number((await params).id));
+  const record = await getPattern(Number((await params).id));
   if (!record) notFound();
   const { pattern, issues } = record;
   const issueAt = new Map(issues.map((i) => [`${i.sectionIndex}:${i.stepIndex}`, i]));

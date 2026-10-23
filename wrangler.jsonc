@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stitchkeeper",
+  // worker.ts wraps the OpenNext build (.open-next/worker.js) and adds the extractor container.
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    // database_id is filled in by `wrangler d1 create stitchkeeper` before the first deploy.
+    { "binding": "DB", "database_name": "stitchkeeper", "database_id": "local", "migrations_dir": "migrations" },
+  ],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "stitchkeeper-files" }],
+  // PDF text and photo extraction (poppler + sharp), see extractor/.
+  "containers": [
+    { "class_name": "Extractor", "image": "./extractor/Dockerfile", "image_build_context": ".", "instance_type": "standard-1", "max_instances": 2 },
+  ],
+  "durable_objects": { "bindings": [{ "name": "EXTRACTOR", "class_name": "Extractor" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Extractor"] }],
+}

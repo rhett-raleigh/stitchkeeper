@@ -49,6 +49,15 @@ export type TrackRow = {
   kind: "row" | "note";
 };
 
+export const rowsOf = (p: Pattern) => p.sections.flatMap((s) => s.steps).filter((s) => s.kind === "row");
+
+// Rule-based parsing is free and instant, so importers try it first and only call
+// Claude when it didn't find a usable pattern.
+export function looksComplete(p: Pattern): boolean {
+  const rows = rowsOf(p);
+  return rows.length >= 3 && rows.filter((r) => r.stitchCount != null).length >= rows.length / 2;
+}
+
 export function expandRows(pattern: Pattern): TrackRow[] {
   const rows: TrackRow[] = [];
   pattern.sections.forEach((section, sectionIndex) => {
