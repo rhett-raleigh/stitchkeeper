@@ -29,7 +29,7 @@ export function ImportForm({ claude }: { claude: boolean }) {
           type="file"
           accept="application/pdf"
           multiple
-          className="mt-1.5 block w-full text-sm file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-2 file:text-paper"
+          className="mt-1.5 block w-full text-base sm:text-sm file:mr-3 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-2 file:text-paper"
         />
       </label>
 

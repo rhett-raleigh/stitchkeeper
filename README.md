@@ -33,6 +33,21 @@ The old `data/` folder (node:sqlite + PDFs) is copied into D1/R2 with `npx tsx s
    preview URLs are off), behind a Cloudflare Access application: the patterns are paid, personal-use files.
    Keep Access in place before attaching any other hostname.
 
+### Deploying on merge (Workers Builds)
+
+Merges to `main` deploy through Cloudflare Workers Builds (Workers → stitchkeeper → Settings → Build):
+
+- Git repository `rhett-raleigh/stitchkeeper`, production branch `main`, root directory `/`.
+- Build command: empty. Deploy command: `npm run deploy:ci`, which applies D1 migrations, then builds
+  and deploys (including the extractor container image).
+- API token: a user token with Workers Scripts, R2, D1 and Workers Routes edit (and Containers, if
+  listed). The default build token has no D1 access, so migrations would fail with it.
+- Non-production branch builds: off. They only upload Worker code (no container image), and Workers
+  with Durable Objects get no preview URLs.
+
+The Worker goes live before the container rollout finishes, so a change that touches both the app and
+the extractor can briefly run new app code against the old extractor.
+
 ## How importing works
 
 PDF steps 1, 2 and 5 run in the extractor (`src/lib/extract/analyze.ts`, served by `extractor/server.ts`);
