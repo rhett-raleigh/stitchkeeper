@@ -11,6 +11,7 @@
     "db:migrate": "wrangler d1 migrations apply stitchkeeper --local",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:ci": "wrangler d1 migrations apply stitchkeeper --remote && npm run deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "import": "tsx scripts/import.ts"
   },

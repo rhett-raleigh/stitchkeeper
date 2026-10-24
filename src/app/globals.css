@@ -1,15 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f7f1e8;
-  --card: #fffcf7;
-  --ink: #2a2420;
-  --muted: #7a6d63;
-  --line: #e6dccf;
-  --yarn: #c4513a;
-  --yarn-dark: #9e3c29;
-  --sage: #6f8a6a;
-  --warn: #b7791f;
+  /* Follows the system unless the user picked a theme (data-theme on <html>). */
+  color-scheme: light dark;
+  --paper: light-dark(#f7f1e8, #1b1714);
+  --card: light-dark(#fffcf7, #25201c);
+  --ink: light-dark(#2a2420, #efe6da);
+  --muted: light-dark(#7a6d63, #a6978a);
+  --line: light-dark(#e6dccf, #3a322c);
+  --yarn: light-dark(#c4513a, #e06a50);
+  --yarn-dark: light-dark(#9e3c29, #c4513a);
+  --sage: light-dark(#6f8a6a, #94b08e);
+  --warn: light-dark(#b7791f, #dda54a);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -24,6 +34,13 @@
   --color-warn: var(--warn);
   --font-sans: var(--font-geist-sans);
   --font-display: var(--font-fraunces);
+}
+
+/* iOS Safari zooms into form controls under 16px; keep touch targets at least 44px. */
+@layer base {
+  input, select, textarea { font-size: max(16px, 1rem); }
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select, textarea, button { min-height: 44px; }
 }
 
 body {
